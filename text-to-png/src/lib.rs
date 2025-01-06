@@ -419,6 +419,64 @@ impl TextRenderer {
         C: TryInto<Color>,
         S: TryInto<FontSize>,
     {
+        let (pixmap, pathbox) = self.render_text_to_pixmap_data_private(
+            text,
+            font_size_raw,
+            color,
+        )?;
+
+        let png_data = pixmap.encode_png()?;
+
+        Ok(TextPng {
+            baseline_down_from_top: -pathbox.y(),
+            size: pathbox.into(),
+            data: png_data,
+        })
+    }
+
+    /// Render the given text to a Pixmap with the given options.
+    /// ```
+    /// use text_to_png::TextRenderer;
+    ///
+    /// let renderer = TextRenderer::default();
+    /// let text_pixmal = renderer
+    ///     .render_text_to_pixmap_data(
+    ///         "Any kind of text will do here", // It can be owned or borrowed
+    ///         42, // Font size in pixels here
+    ///         "#FF00FF" // A good color for the job, "Magenta" would work too
+    ///     );
+    /// ``
+    pub fn render_text_to_pixmap_data<T, C, S>(
+        &self,
+        text: T,
+        font_size_raw: S,
+        color: C,
+    ) -> Result<Pixmap, TextToPngError>
+    where
+        T: AsRef<str>,
+        C: TryInto<Color>,
+        S: TryInto<FontSize>,
+    {
+        let (pixmap, _pathbox) = self.render_text_to_pixmap_data_private(
+            text,
+            font_size_raw,
+            color,
+        )?;
+
+        Ok(pixmap)
+    }
+    
+    fn render_text_to_pixmap_data_private<T, C, S>(
+        &self,
+        text: T,
+        font_size_raw: S,
+        color: C,
+    ) -> Result<(Pixmap, PathBbox), TextToPngError>
+    where
+        T: AsRef<str>,
+        C: TryInto<Color>,
+        S: TryInto<FontSize>,
+    {
         let font_size: FontSize = font_size_raw
             .try_into()
             .ok()
@@ -436,7 +494,7 @@ impl TextRenderer {
                 None
             });
 
-        self.render_text_to_png_data_private(
+        self.render_text_to_pixmap_private(
             text_str,
             font_size_pixels,
             color_val,
@@ -466,12 +524,12 @@ impl TextRenderer {
         Ok(size)
     }
 
-    fn render_text_to_png_data_private(
+    fn render_text_to_pixmap_private(
         &self,
         text: String,
         font_size: f64,
         color: Color,
-    ) -> Result<TextPng, TextToPngError> {
+    ) -> Result<(Pixmap, PathBbox), TextToPngError> {
         let content = format!(
             include_str!("resources/template.svg"),
             font_size, color, text
@@ -494,13 +552,8 @@ impl TextRenderer {
         .ok_or(TextToPngError::CouldNotCreateImageStorage)?;
 
         render_node(&tree, &text_node, FitTo::Original, pixmap.as_mut());
-        let png_data = pixmap.encode_png()?;
 
-        Ok(TextPng {
-            baseline_down_from_top: -size.y(),
-            size: size.into(),
-            data: png_data,
-        })
+        Ok((pixmap, size))
     }
 }
 
